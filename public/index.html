@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Token DApp</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Simple Token DApp</h1>
+            <button id="connectWallet">Connect Wallet</button>
+        </header>
+
+        <main>
+            <div class="wallet-info">
+                <h2>Wallet Information</h2>
+                <p><strong>Address:</strong> <span id="walletAddress">Not connected</span></p>
+                <p><strong>Balance:</strong> <span id="tokenBalance">0</span> SIM</p>
+            </div>
+
+            <div class="transfer-section">
+                <h2>Transfer Tokens</h2>
+                <form id="transferForm">
+                    <div class="form-group">
+                        <label for="recipientAddress">Recipient Address:</label>
+                        <input type="text" id="recipientAddress" placeholder="0x..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transferAmount">Amount:</label>
+                        <input type="number" id="transferAmount" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                    <button type="submit">Transfer Tokens</button>
+                </form>
+            </div>
+
+            <div class="transaction-status">
+                <h2>Transaction Status</h2>
+                <div id="statusMessage"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
