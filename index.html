@@ -133,6 +133,12 @@
             border: 1px solid #90cdf4;
         }
 
+        .warning {
+            background: #fefcbf;
+            color: #744210;
+            border: 1px solid #f6e05e;
+        }
+
         .wallet-info p {
             margin-bottom: 10px;
             font-size: 1.1em;
@@ -145,16 +151,35 @@
             border-radius: 4px;
         }
 
+        .install-metamask {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .install-metamask a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .install-metamask a:hover {
+            text-decoration: underline;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
             }
-            
+
             header {
                 flex-direction: column;
                 gap: 15px;
             }
-            
+
             h1 {
                 font-size: 1.5em;
             }
@@ -167,6 +192,12 @@
             <h1>Simple Token DApp</h1>
             <button id="connectWallet">Connect Wallet</button>
         </header>
+
+        <div id="metamaskWarning" class="install-metamask" style="display: none;">
+            <h2>MetaMask Required</h2>
+            <p>This DApp requires MetaMask to function. Please install MetaMask and refresh this page.</p>
+            <p><a href="https://metamask.io/download/" target="_blank">Download MetaMask</a></p>
+        </div>
 
         <main>
             <div class="wallet-info">
@@ -437,8 +468,8 @@
             }
         ];
 
-        // REPLACE THIS WITH YOUR DEPLOYED CONTRACT ADDRESS FROM REMIX
-        const CONTRACT_ADDRESS = "0x..."; // Update this after deployment!
+        // Contract address
+        const CONTRACT_ADDRESS = "0xd5C8678dd7895FBD1abed79f4AEAAAe479Bc9792";
 
         let web3;
         let contract;
@@ -451,61 +482,122 @@
         const networkName = document.getElementById('networkName');
         const transferForm = document.getElementById('transferForm');
         const statusMessage = document.getElementById('statusMessage');
+        const metamaskWarning = document.getElementById('metamaskWarning');
+
+        // Check if MetaMask is installed
+        function isMetaMaskInstalled() {
+            return typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask;
+        }
+
+        // Wait for MetaMask to be fully loaded
+        async function waitForMetaMask(maxAttempts = 10) {
+            for (let i = 0; i < maxAttempts; i++) {
+                if (isMetaMaskInstalled()) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            return false;
+        }
 
         // Initialize the DApp
         async function init() {
-            if (typeof window.ethereum !== 'undefined') {
-                web3 = new Web3(window.ethereum);
-                
-                // Check if already connected
+            console.log('Initializing DApp...');
+            
+            // Wait for MetaMask to load
+            const metaMaskLoaded = await waitForMetaMask();
+            
+            if (!metaMaskLoaded) {
+                console.log('MetaMask not detected');
+                metamaskWarning.style.display = 'block';
+                connectWalletBtn.textContent = 'Install MetaMask';
+                connectWalletBtn.disabled = true;
+                showStatus('MetaMask is required to use this DApp. Please install MetaMask and refresh the page.', 'warning');
+                return;
+            }
+
+            console.log('MetaMask detected');
+            web3 = new Web3(window.ethereum);
+            contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+
+            // Check if already connected
+            try {
                 const accounts = await web3.eth.getAccounts();
                 if (accounts.length > 0) {
                     currentAccount = accounts[0];
                     await updateUI();
+                    showStatus('Wallet already connected!', 'success');
                 }
-            } else {
-                showStatus('Please install MetaMask to use this DApp', 'error');
+            } catch (error) {
+                console.error('Error checking existing accounts:', error);
             }
         }
 
         // Connect wallet
         async function connectWallet() {
+            if (!isMetaMaskInstalled()) {
+                window.open('https://metamask.io/download/', '_blank');
+                return;
+            }
+
             try {
+                console.log('Requesting account access...');
+                showStatus('Connecting to MetaMask...', 'loading');
+
                 const accounts = await window.ethereum.request({
                     method: 'eth_requestAccounts'
                 });
+
+                if (accounts.length === 0) {
+                    throw new Error('No accounts found. Please make sure MetaMask is unlocked.');
+                }
+
                 currentAccount = accounts[0];
                 await updateUI();
                 showStatus('Wallet connected successfully!', 'success');
+                
             } catch (error) {
-                showStatus('Failed to connect wallet: ' + error.message, 'error');
+                console.error('Connection error:', error);
+                if (error.code === 4001) {
+                    showStatus('Connection rejected by user.', 'error');
+                } else if (error.code === -32002) {
+                    showStatus('Connection request already pending. Please check MetaMask.', 'warning');
+                } else {
+                    showStatus('Failed to connect wallet: ' + error.message, 'error');
+                }
             }
         }
 
         // Update UI with wallet information
         async function updateUI() {
-            if (currentAccount) {
+            if (!currentAccount) return;
+
+            try {
                 walletAddress.textContent = currentAccount;
                 connectWalletBtn.textContent = 'Connected';
                 connectWalletBtn.disabled = true;
-                
+
                 // Get network info
                 const networkId = await web3.eth.net.getId();
                 networkName.textContent = getNetworkName(networkId);
-                
-                // Get token balance if contract address is set
-                if (CONTRACT_ADDRESS !== "0x...") {
-                    try {
-                        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-                        const balance = await contract.methods.balanceOf(currentAccount).call();
-                        const balanceInTokens = web3.utils.fromWei(balance, 'ether');
-                        tokenBalance.textContent = parseFloat(balanceInTokens).toFixed(2);
-                    } catch (error) {
-                        console.error('Error fetching balance:', error);
-                        tokenBalance.textContent = 'Error loading balance';
-                    }
+
+                // Check if we're on the correct network
+                if (networkId !== 11155111) {
+                    showStatus('Please switch to Sepolia network in MetaMask', 'warning');
+                    return;
+                }
+
+                // Get token balance
+                const balance = await contract.methods.balanceOf(currentAccount).call();
+                const balanceInTokens = web3.utils.fromWei(balance, 'ether');
+                tokenBalance.textContent = parseFloat(balanceInTokens).toFixed(2);
+
+            } catch (error) {
+                console.error('Error updating UI:', error);
+                if (error.message.includes('network')) {
+                    showStatus('Network error. Please check your connection and try again.', 'error');
                 } else {
-                    tokenBalance.textContent = 'Contract not deployed';
+                    showStatus('Error loading wallet information: ' + error.message, 'error');
                 }
             }
         }
@@ -524,44 +616,65 @@
         // Transfer tokens
         async function transferTokens(event) {
             event.preventDefault();
-            
-            const recipientAddress = document.getElementById('recipientAddress').value;
-            const amount = document.getElementById('transferAmount').value;
-            
+
+            const recipientAddress = document.getElementById('recipientAddress').value.trim();
+            const amount = document.getElementById('transferAmount').value.trim();
+
             if (!currentAccount) {
                 showStatus('Please connect your wallet first', 'error');
                 return;
             }
-            
-            if (CONTRACT_ADDRESS === "0x...") {
-                showStatus('Please update the contract address in the code', 'error');
-                return;
-            }
-            
+
             if (!recipientAddress || !amount) {
                 showStatus('Please fill in all fields', 'error');
                 return;
             }
-            
+
+            // Validate Ethereum address
+            if (!web3.utils.isAddress(recipientAddress)) {
+                showStatus('Please enter a valid Ethereum address', 'error');
+                return;
+            }
+
+            // Validate amount
+            if (isNaN(amount) || parseFloat(amount) <= 0) {
+                showStatus('Please enter a valid amount', 'error');
+                return;
+            }
+
             try {
                 showStatus('Transaction in progress...', 'loading');
-                
+
                 const amountInWei = web3.utils.toWei(amount, 'ether');
-                
+
+                // Check balance first
+                const balance = await contract.methods.balanceOf(currentAccount).call();
+                if (web3.utils.toBN(balance).lt(web3.utils.toBN(amountInWei))) {
+                    showStatus('Insufficient balance for this transfer', 'error');
+                    return;
+                }
+
                 const result = await contract.methods.transfer(recipientAddress, amountInWei).send({
                     from: currentAccount
                 });
-                
+
                 showStatus(`Transaction successful! Hash: ${result.transactionHash}`, 'success');
-                
+
                 // Update balance
                 await updateUI();
-                
+
                 // Clear form
                 document.getElementById('transferForm').reset();
-                
+
             } catch (error) {
-                showStatus('Transaction failed: ' + error.message, 'error');
+                console.error('Transfer error:', error);
+                if (error.code === 4001) {
+                    showStatus('Transaction rejected by user', 'error');
+                } else if (error.message.includes('insufficient funds')) {
+                    showStatus('Insufficient ETH for gas fees', 'error');
+                } else {
+                    showStatus('Transaction failed: ' + error.message, 'error');
+                }
             }
         }
 
@@ -570,6 +683,13 @@
             statusMessage.textContent = message;
             statusMessage.className = type;
             statusMessage.style.display = 'block';
+            
+            // Auto-hide success messages after 10 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusMessage.style.display = 'none';
+                }, 10000);
+            }
         }
 
         // Event listeners
@@ -577,27 +697,39 @@
         transferForm.addEventListener('submit', transferTokens);
 
         // Listen for account changes
-        if (window.ethereum) {
+        if (typeof window.ethereum !== 'undefined') {
             window.ethereum.on('accountsChanged', function (accounts) {
                 if (accounts.length > 0) {
                     currentAccount = accounts[0];
                     updateUI();
+                    showStatus('Account changed', 'success');
                 } else {
                     currentAccount = null;
                     walletAddress.textContent = 'Not connected';
                     tokenBalance.textContent = '0';
+                    networkName.textContent = 'Unknown';
                     connectWalletBtn.textContent = 'Connect Wallet';
                     connectWalletBtn.disabled = false;
+                    showStatus('Wallet disconnected', 'warning');
                 }
             });
 
             window.ethereum.on('chainChanged', function () {
                 window.location.reload();
             });
+
+            window.ethereum.on('disconnect', function() {
+                showStatus('MetaMask disconnected', 'error');
+            });
         }
 
         // Initialize on page load
-        init();
+        window.addEventListener('load', init);
+        
+        // Also try to initialize immediately in case the page is already loaded
+        if (document.readyState === 'complete') {
+            init();
+        }
     </script>
 </body>
 </html>
