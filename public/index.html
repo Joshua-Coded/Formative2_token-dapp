@@ -4,7 +4,162 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple Token DApp</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #4a5568;
+            font-size: 2em;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        main {
+            display: grid;
+            gap: 20px;
+        }
+
+        .wallet-info,
+        .transfer-section,
+        .transaction-status {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #statusMessage {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .loading {
+            background: #bee3f8;
+            color: #2a69ac;
+            border: 1px solid #90cdf4;
+        }
+
+        .wallet-info p {
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .wallet-info span {
+            font-family: 'Courier New', monospace;
+            background: #f7fafc;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -18,6 +173,7 @@
                 <h2>Wallet Information</h2>
                 <p><strong>Address:</strong> <span id="walletAddress">Not connected</span></p>
                 <p><strong>Balance:</strong> <span id="tokenBalance">0</span> SIM</p>
+                <p><strong>Network:</strong> <span id="networkName">Unknown</span></p>
             </div>
 
             <div class="transfer-section">
@@ -43,6 +199,405 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
-    <script src="app.js"></script>
+    <script>
+        // Contract ABI - Complete ABI from Remix
+        const CONTRACT_ABI = [
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "_initialSupply",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "owner",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "spender",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "value",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "Approval",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "from",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "to",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "value",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "Transfer",
+                "type": "event"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "allowance",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_spender",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "_value",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "approve",
+                "outputs": [
+                    {
+                        "internalType": "bool",
+                        "name": "success",
+                        "type": "bool"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "name": "balanceOf",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "decimals",
+                "outputs": [
+                    {
+                        "internalType": "uint8",
+                        "name": "",
+                        "type": "uint8"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "name",
+                "outputs": [
+                    {
+                        "internalType": "string",
+                        "name": "",
+                        "type": "string"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "symbol",
+                "outputs": [
+                    {
+                        "internalType": "string",
+                        "name": "",
+                        "type": "string"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "totalSupply",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_to",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "_value",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "transfer",
+                "outputs": [
+                    {
+                        "internalType": "bool",
+                        "name": "success",
+                        "type": "bool"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "_from",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "_to",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "_value",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "transferFrom",
+                "outputs": [
+                    {
+                        "internalType": "bool",
+                        "name": "success",
+                        "type": "bool"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ];
+
+        // REPLACE THIS WITH YOUR DEPLOYED CONTRACT ADDRESS FROM REMIX
+        const CONTRACT_ADDRESS = "0x..."; // Update this after deployment!
+
+        let web3;
+        let contract;
+        let currentAccount;
+
+        // DOM elements
+        const connectWalletBtn = document.getElementById('connectWallet');
+        const walletAddress = document.getElementById('walletAddress');
+        const tokenBalance = document.getElementById('tokenBalance');
+        const networkName = document.getElementById('networkName');
+        const transferForm = document.getElementById('transferForm');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // Initialize the DApp
+        async function init() {
+            if (typeof window.ethereum !== 'undefined') {
+                web3 = new Web3(window.ethereum);
+                
+                // Check if already connected
+                const accounts = await web3.eth.getAccounts();
+                if (accounts.length > 0) {
+                    currentAccount = accounts[0];
+                    await updateUI();
+                }
+            } else {
+                showStatus('Please install MetaMask to use this DApp', 'error');
+            }
+        }
+
+        // Connect wallet
+        async function connectWallet() {
+            try {
+                const accounts = await window.ethereum.request({
+                    method: 'eth_requestAccounts'
+                });
+                currentAccount = accounts[0];
+                await updateUI();
+                showStatus('Wallet connected successfully!', 'success');
+            } catch (error) {
+                showStatus('Failed to connect wallet: ' + error.message, 'error');
+            }
+        }
+
+        // Update UI with wallet information
+        async function updateUI() {
+            if (currentAccount) {
+                walletAddress.textContent = currentAccount;
+                connectWalletBtn.textContent = 'Connected';
+                connectWalletBtn.disabled = true;
+                
+                // Get network info
+                const networkId = await web3.eth.net.getId();
+                networkName.textContent = getNetworkName(networkId);
+                
+                // Get token balance if contract address is set
+                if (CONTRACT_ADDRESS !== "0x...") {
+                    try {
+                        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+                        const balance = await contract.methods.balanceOf(currentAccount).call();
+                        const balanceInTokens = web3.utils.fromWei(balance, 'ether');
+                        tokenBalance.textContent = parseFloat(balanceInTokens).toFixed(2);
+                    } catch (error) {
+                        console.error('Error fetching balance:', error);
+                        tokenBalance.textContent = 'Error loading balance';
+                    }
+                } else {
+                    tokenBalance.textContent = 'Contract not deployed';
+                }
+            }
+        }
+
+        // Get network name
+        function getNetworkName(networkId) {
+            const networks = {
+                1: 'Ethereum Mainnet',
+                11155111: 'Sepolia Testnet',
+                5: 'Goerli Testnet',
+                1337: 'Local Network'
+            };
+            return networks[networkId] || `Network ID: ${networkId}`;
+        }
+
+        // Transfer tokens
+        async function transferTokens(event) {
+            event.preventDefault();
+            
+            const recipientAddress = document.getElementById('recipientAddress').value;
+            const amount = document.getElementById('transferAmount').value;
+            
+            if (!currentAccount) {
+                showStatus('Please connect your wallet first', 'error');
+                return;
+            }
+            
+            if (CONTRACT_ADDRESS === "0x...") {
+                showStatus('Please update the contract address in the code', 'error');
+                return;
+            }
+            
+            if (!recipientAddress || !amount) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Transaction in progress...', 'loading');
+                
+                const amountInWei = web3.utils.toWei(amount, 'ether');
+                
+                const result = await contract.methods.transfer(recipientAddress, amountInWei).send({
+                    from: currentAccount
+                });
+                
+                showStatus(`Transaction successful! Hash: ${result.transactionHash}`, 'success');
+                
+                // Update balance
+                await updateUI();
+                
+                // Clear form
+                document.getElementById('transferForm').reset();
+                
+            } catch (error) {
+                showStatus('Transaction failed: ' + error.message, 'error');
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = type;
+            statusMessage.style.display = 'block';
+        }
+
+        // Event listeners
+        connectWalletBtn.addEventListener('click', connectWallet);
+        transferForm.addEventListener('submit', transferTokens);
+
+        // Listen for account changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', function (accounts) {
+                if (accounts.length > 0) {
+                    currentAccount = accounts[0];
+                    updateUI();
+                } else {
+                    currentAccount = null;
+                    walletAddress.textContent = 'Not connected';
+                    tokenBalance.textContent = '0';
+                    connectWalletBtn.textContent = 'Connect Wallet';
+                    connectWalletBtn.disabled = false;
+                }
+            });
+
+            window.ethereum.on('chainChanged', function () {
+                window.location.reload();
+            });
+        }
+
+        // Initialize on page load
+        init();
+    </script>
 </body>
 </html>

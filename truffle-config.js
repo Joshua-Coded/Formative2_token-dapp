@@ -11,13 +11,27 @@ module.exports = {
       port: 8545,
       network_id: "*"
     },
+    develop: {
+      host: "127.0.0.1",
+      port: 9545,
+      network_id: "*"
+    },
     sepolia: {
-      provider: () => new HDWalletProvider(mnemonic, `https://sepolia.infura.io/v3/${infuraProjectId}`),
+      provider: () => new HDWalletProvider({
+        mnemonic: mnemonic,
+        providerOrUrl: `https://sepolia.infura.io/v3/${infuraProjectId}`,
+        numberOfAddresses: 1,
+        shareNonce: true,
+        derivationPath: "m/44'/60'/0'/0/"
+      }),
       network_id: 11155111,
-      gas: 5500000,
+      gas: 4500000,
+      gasPrice: 20000000000, // 20 gwei
       confirmations: 2,
       timeoutBlocks: 200,
-      skipDryRun: true
+      skipDryRun: true,
+      networkCheckTimeout: 10000,
+      pollingInterval: 10000
     }
   },
 
@@ -28,8 +42,7 @@ module.exports = {
         optimizer: {
           enabled: false,
           runs: 200
-        },
-        evmVersion: "byzantium"
+        }
       }
     }
   },
